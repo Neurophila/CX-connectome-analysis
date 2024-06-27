@@ -1,0 +1,966 @@
+---
+title: 'Electrotonic distance of synapses to putative spike initiation zone for neurons in the EB'
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+#Analysis of electrotonic distance of synapses categorized by modality type to putative spike initiation zone.
+
+Electrotonic distance calculuated should be approximately proportional to the actual electrotonic distance as we do not know the values of the specific intracellular and membrane resistivity.
+
+Example of EPG and rootpoint (section 2) \* Figure 12A
+
+CDFs of electrotonic and raw distances (section 3) \* Figure 12 C (normalized electrotonic distances) \* Figure 12 supplement 1E (raw distances along arbors)
+
+Medians of distance distributions (section 4) \* Figure 12E - distributions of the medians of the electrotonic distance distributions for each modality (EPG) \* Figure 12 supplement 3B - distributions of the medians of the electrotonic distance distributions for each modality (EL) \* Figure 12 supplement 1F - distributions of the medians of the raw distances along arbor distributions for each modality \* Figure 12 supplement 2 - distributions of the medians of the electrotonic distance distributions for each neuron type within modalities
+
+Rank ordering by medians (section 4a) \* Figure 12 supplement 1B - median rank ordering of modalities (EPG) \* Figure 12 supplement 3C - median rank ordering of modalities (EL)
+
+Median distance between distributions (section 4b) \* Figure 12 supplement 1C - median distance between distributions of consecutive rank order
+
+Distribution of synapses by modality in EB with mean distance contours (section 5) \* Figure 12C (left) - density of synapses with mean electotonic distance (EPG) \* Figure 12 supplement 3A (top) - density of synapses with mean electotonic distance (EL) \* Figure 12 supplement 1D - density of synapses with mean raw distance along arbor \* Figure 12C (right) - synapse densities grouped by modality (EPG) \* Figure 12 supplement 3A (bottom) - synapse densities grouped by modality (EL) \* Figure 12 supplement 1A - synapse densities grouped by modality, plotted separately
+
+```{r, message=FALSE, warning=FALSE}
+
+library(natverse)
+library(neuprintr)
+library(hemibrainr)
+library(igraph)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(neuprintrExtra)
+source(file.path("..","R","SynapsePCAUtils.R"))
+library(rgl)
+library(patchwork)
+library(gridExtra)
+library(ggbeeswarm)
+
+
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+require(alphahull)
+```
+
+```{r, message=FALSE, warning=FALSE}
+require(RColorBrewer)
+library("paletteer")
+source(file.path("..","R","paperTheme.R"))
+```
+
+### Saving plots
+
+Indicate if you would like to save the plots here (default is false). Plots will be saved inside this folder in a subdirectory "plots".
+
+```{r}
+savePlot = TRUE
+if (savePlot){
+  dir.create("DNa02_subgraph_distances")
+}
+```
+
+## (1) Load in neurons and prepare them for analysis
+
+Choose which neuron type to analyze electrotonic distances on.
+
+```{r neuron info}
+# neurons for which you care about the synaptic locations
+# nron_info = neuprint_search("DNa02", field = "type", fixed=TRUE, exact = FALSE)
+
+nronType = 'DNa02'
+nron_info = neuprint_search(paste(".*", nronType, ".*", sep = ""))
+
+#neuprint_search("DNa02", field = "type", fixed=TRUE, exact = FALSE)
+```
+
+```{r}
+dn = neuprint_connection_table("DNa02", partners='in', summary=TRUE, details=TRUE)
+(dn)
+dn_ins <-  c(unique(dn$type))
+dn
+# print(dn_ins)
+```
+
+```{r}
+# synaptic partners you're interested in
+# partner_info = neuprint_search(".*PFL.*")
+# (partner_info)
+# unique(partner_info$name)
+# partner_info = rbind(partner_info, neuprint_search((".*LAL046_R*")))
+
+
+
+
+
+
+
+	
+
+# partner_info = rbind(partner_info, neuprint_ids("5813046185")) #MooSEZ
+(partner_info)
+sort(unique(partner_info$name))
+# 
+# # set this to NULL if you want to consider all synapses
+partner_info = NULL
+# mz = neuprint_ids("5813046185", all_segments = True)
+# head(mz)
+
+```
+
+Read in the neurons we care about. This might take a while depending on how many neurons you're trying to load in, so if there are ones you know you don't want to consider, include their index in the exclude list.
+
+```{r read in neurons}
+
+# if(nronType == 'PFL'){
+#   pfl3 = grep('PFL3',nron_info$name)
+#   pfl2 = grep('PFL2',nron_info$name)
+#   pfl1 = grep('PFL1',nron_info$name)
+# 
+#   exclude = unique(c(NPFL1-I))
+# } else {
+#   exclude = c()
+# }
+# 
+# 
+
+
+
+if(is.null(exclude)){
+  nronList = neuprint_read_neurons(nron_info$bodyid)
+} else {
+  nronList = neuprint_read_neurons(nron_info$bodyid[-exclude])
+}
+
+
+```
+
+Find neurons with disoriented graphs (needed for EPGs, not ELs). - intersect each neuron with each significant ROI - find shortest path between points in each ROI to rootpoint - shortest path of these tells you which ROI the rootpoint is closest too
+
+```{r}
+if(nronType == 'DNa02'){
+
+# Significant ROIs for DNa02 microcircuit
+sigROI = c('LAL(R)', 'IPS(R)', 'GNG')
+sigROI_mesh = lapply(sigROI, FUN = neuprint_ROI_mesh)
+
+distancesDF = data.frame()
+
+for(roiMesh in sigROI_mesh){
+  nronROI = lapply(nronList, function(n) subset(n, pointsinside(n, surf = roiMesh)))
+  rpPN = sapply(nronList, function(n) n$d[rootpoints(n),'PointNo'])
+  roiNodes = lapply(nronROI, function(n) n$d$PointNo)
+  distRPtoROI = mapply(function(n,rp,nodes) min(distances(as.ngraph(n, weights = T), v = as.character(rp), to = as.character(nodes), mode = 'out')), n = nronList, rp = rpPN, nodes = roiNodes)
+  
+  if(ncol(distancesDF) == 0){
+    distancesDF = as.data.frame(distRPtoROI)
+  } else {
+    distancesDF = cbind(distancesDF, distRPtoROI)
+  }
+  
+}
+
+colnames(distancesDF) = sigROI
+distancesDF$closestROI = colnames(distancesDF)[apply(distancesDF,1,which.min)]
+
+closestROInum = table(distancesDF$closestROI)
+closestROInum
+
+closestROIname = names(which.max(closestROInum))
+disoriented = nronList[distancesDF$closestROI != closestROIname]
+
+} else {
+  disoriented = c()
+}
+```
+
+Fix the disoriented graphs using hemibrain_reroot().
+
+```{r}
+
+if(length(disoriented) > 0){
+  nronList = setdiff(nronList, disoriented)
+  adjustRP = hemibrain_reroot(disoriented)
+  nronList = c(nronList, adjustRP)
+}
+
+```
+
+Find the synapses that are from the types of neurons we're interested in and add the partner type info to the data frame.
+
+```{r synapses}
+# this grabs all the synapses for you
+nron_synapses = lapply(nronList, function(nron) nron$connectors)
+
+# keep only the synapses from the partner types you're interested in
+# if you're interested in all synapses, partner_info should be set to NULL
+if(!is.null(partner_info)){
+nron_synapses = lapply(nron_synapses, function(syn) subset(syn, partner %in% partner_info$bodyid))
+}
+
+# include partner type to dataframe
+nron_synapses = lapply(nron_synapses, function(syn){
+  partnerType = neuprint_get_meta(syn$partner)$type
+  cbind(syn,partnerType)
+})
+```
+
+## (2) Subset the neurons to just the parts that innervate the ROI of interest (here, the ellipsoid body (EB))
+
+Intersect neuron and synapses with EB.
+
+```{r subsetting neuron}
+mainROI1 <- ('LAL(R)')
+mainROI2 <- ('IPS(R)')
+mainROI3 <- ('GNG')
+
+
+
+# # Add element at the end of the list.
+# mainROI <- append(mainROI,'LAL(R)',after=1)
+
+
+
+# mainROI
+mainROI_mesh1 = neuprint_ROI_mesh(roi = mainROI1)
+mainROI_mesh2 = neuprint_ROI_mesh(roi = mainROI2)
+mainROI_mesh3 = neuprint_ROI_mesh(roi = mainROI3)
+
+mainROI_mesh_inter = merge(mainROI_mesh1, mainROI_mesh2)
+
+
+mainROI_mesh = merge(mainROI_mesh_inter, mainROI_mesh3)
+
+nronMainROI = nlapply(nronList, function(nron,mesh) subset(nron, pointsinside(nron, surf = mesh)), mesh = mainROI_mesh)
+
+nronMainROI_synapses = lapply(nron_synapses, function(n,mesh) subset(n, pointsinside(n, surf = mesh)), mesh = mainROI_mesh)
+
+
+```
+
+
+```{r}
+
+buildGraph <- function(fullNron, subNron, synDF){
+
+  # turn the subsetted neuron into a graph
+  fullG = as.ngraph(subNron)
+  
+  # make sure all synapses that occur in EB are in this graph
+  if(!all(synDF$treenode_id %in% V(fullG)$name)){
+    inds = which(!(synDF$treenode_id %in% V(fullG)$name))
+    pn = unique(synDF$treenode_id[inds])
+    fullG = add_vertices(fullG, nv = length(pn), name = pn)
+  }
+
+  while(!is_connected(fullG)){
+    # decompose the graph into it's connected parts
+    graphCompList = decompose(fullG, mode = "weak")
+    for(g in graphCompList){
+      # if the subgraph doesn't have any synapses, 
+      #   remove it from the full graph
+      if(!any(V(g)$name %in% synDF$treenode_id)){
+        fullG = fullG - as.character(V(g)$name)
+      } else {
+      # otherwise, identify the current root of the subgraph
+      #   and find it's parent in the neuron.
+        tempRoot = V(g)$name[!degree(g, mode = "in")]
+        tempParent = fullNron$d[fullNron$d$PointNo == tempRoot,]$Parent
+        # Add the parent if it is not already in the full graph
+        if (!(tempParent %in% V(fullG)$name)){
+          fullG = add_vertices(fullG, nv = 1, name = tempParent)
+        }
+        # Add the appropriate edge connecting the subgraphs root 
+        #   to it's parent to the full graph
+        fullG = add_edges(fullG, edges = as.character(c(tempParent, tempRoot)))
+      }
+    }
+  }
+  
+  return(fullG)
+}
+
+
+
+```
+
+This function prunes down the graph generated by the buildGraph function so that only the necessary nodes are kept on the root side:
+
+```{r}
+
+pruneGraph <- function(fullG, fullNron, synDF){
+  
+  # find the current root of the graph fullG 
+  #   (by finding the only node with 0 edges pointing to it)
+  root = V(fullG)$name[!degree(fullG, mode = "in")]
+  # find the neighbors of this node (outward)
+  rootNhb = neighbors(fullG, as.character(root), mode = "out")
+  # indicator whether or not to keep going through while loop
+  keepGoing = 1
+
+  while(keepGoing){
+    if(!(length(rootNhb) == 1)){ # if there is more than one neighbor,
+      # check whether or not the path from each neighbor contains synapses
+      # if it doesn't, remove that whole path from the graph
+      for(nhb in rootNhb$name){
+        nhbPath = dfs(fullG, as.character(nhb), neimode = 'out', unreachable = F)
+        nhbPath = nhbPath$order[!is.na(nhbPath$order)]
+        if(!any(nhbPath$name %in% synDF$treenode_id)){
+          fullG = fullG - as.character(nhbPath$name)
+        }
+      }
+    # have to rerun finding rootNhb here, otherwise igraph gets confused if you pull from the original rootNhb after deleting some of those vertices from the full graph.
+    rootNhb = neighbors(fullG, as.character(root), mode = "out")
+    if(length(rootNhb) > 1){ # if you still have more than one neighbor, stop pruning
+      keepGoing = 0
+      break
+    } else if(length(rootNhb) == 0){ # if there are no neighbors left, something went wrong
+      print('something went wrong, no neighbors left')
+      break
+    }
+    }
+    
+  # if you made it here, there is only one neighbor left
+  # find the path out from this neighbor to each synapse
+    synapsePaths = shortest_paths(as.ngraph(fullNron), from = as.character(rootNhb$name), to = as.character(synDF$treenode_id), mode = 'out')
+    synapsePathsLength = sapply(synapsePaths$vpath, length)
+    if(any(synapsePathsLength == 0)){ # if any synapses can't be reached by the neighbor, stop pruning
+      keepGoing = 0
+    } else { # if all synapses are reachable from the neighbor, then remove the root node and repeat everything with the neighbor now as the root
+      fullG = fullG - as.character(root)
+      root = rootNhb$name
+      rootNhb = neighbors(fullG, as.character(root), mode = "out")
+    }
+  }
+  
+  return(fullG)
+}
+
+
+```
+
+Now that we have these functions, we can use them to fix the graphs (this will take a minute to run).
+
+```{r}
+# build graphs up (i.e., heal any fractures)
+nronGraphs = mapply(buildGraph, nronList, nronMainROI, nronMainROI_synapses, SIMPLIFY = F)
+```
+
+```{r}
+# #prune graphs down on the root side 
+# { warning = F}
+# 
+# nronGraphs = mapply(pruneGraph, nronGraphs, nronList, nronMainROI_synapses, SIMPLIFY = F)
+
+```
+
+Update the subsetted neurons now that we have the correct graphs for them.
+
+```{r}
+nronMainROI = nmapply(function(nron,g) subset(nron, PointNo %in% V(g)$name), nronList, g = nronGraphs) 
+```
+
+With the correct graphs we can automatically pull the rootpoint using the rootpoints function.
+
+Figure 12A - example neuron and rootpoint.
+
+```{r}
+if(savePlot){
+  pdf(paste('NT_Inputs_to_DNa02/example', nronType, '_RP.pdf', sep=""))
+}
+
+exInd = 1
+nron = nronList[[exInd]]
+rp = nronMainROI[[exInd]]$d[rootpoints(nronMainROI[[exInd]]),]
+egNronPlot = plot(nron, WithNodes = F)
+points(rp$X, rp$Y, col = '#FF0000', cex = 1, pch = 19)
+
+if(savePlot){
+  dev.off()
+}
+```
+
+## (3) Compute electrotonic distances between synapses and rootpoint.
+
+Compute the raw distance along the arbor between the synapses of interest and the rootpoint.
+
+```{r}
+
+nronMainROI_synapses = mapply(function(nron,syn){
+  distToRoot = distances(as.ngraph(nron, weights = T), v = as.character(nron$d$PointNo[rootpoints(nron)]), to = as.character(unique(syn$treenode_id)), mode = 'out')
+  distToRoot = distToRoot[match(syn$treenode_id, unique(syn$treenode_id))]
+  distToRoot = distToRoot/125 # converts distance to microns
+  syn = cbind(syn, distToRoot)
+}, nron = nronMainROI, syn = nronMainROI_synapses, SIMPLIFY = F)
+
+```
+
+With the raw distance we can compute the electrotonic distance (technically something proportional to the electrotonic distance) between the synapses of interest and the rootpoint. The following function does that.
+
+```{r}
+
+electrotonicDist <- function(nron,syn){
+g = as.ngraph(nron,weights = T)
+edgePath = shortest_paths(g, from = as.character(nron$d$PointNo[rootpoints(nron)]), to = as.character(unique(syn$treenode_id)), mode = 'out', output = 'epath')
+
+electroDist = sapply(edgePath$epath, function(edges){
+  edgeLength = edge_attr(g,'weight',index = edges)/125
+  ver = ends(g,edges,names=T)[,2]
+  verDiam = vertex_attr(g,'diam',index = as.character(ver))/125
+
+  lengthConst = sqrt(verDiam/4)
+  electroLength = edgeLength/lengthConst
+  electroDist = sum(electroLength)
+})
+
+electroDist = electroDist[match(syn$treenode_id, unique(syn$treenode_id))]
+
+syn = cbind(syn, electroDist)
+
+}
+
+```
+
+Calculate the electrotonic distances for every neuron.
+
+```{r}
+nronMainROI_synapses = mapply(electrotonicDist, nron = nronMainROI, syn = nronMainROI_synapses, SIMPLIFY = F)
+
+```
+
+Turn this into one big dataframe:
+
+```{r}
+synapses = suppressWarnings(bind_rows(nronMainROI_synapses))
+```
+
+Normalize the electrotonic distances for better comparison across neurons.
+
+```{r}
+
+synapses = synapses %>% group_by(bodyid) %>%
+              mutate(rangeEDist = electroDist - min(electroDist)) %>%
+              mutate(normEDist = rangeEDist/(max(rangeEDist))) %>%
+              ungroup()
+
+```
+
+Group synaptic partners of interest into groups of different input modalities. The modality types and the neurons that fall under each type are: Mechanosensory: ER1. Contralateral visual + motor: ER3a, ER3p, ER3m. Ipsilateral visual + pol: ER2, ER3w, ER4d, ER4m. Sleep: ER3d, ER5. Motor: PEN.
+
+```{r}
+
+#Lists containing neurons with LAL Synaptic Partners
+
+# PFL3_syns = c('LAL030_a', 'PS026', 'DNa03', 'ATL005', 'LAL052', 'IB047', 'LAL121', 'LAL120', 'LAL088', 'AOTU019', 'AOTU042', 'LAL010', 'LAL124', 'PS010', 'LAL035', 'LAL023', 'LAL078', 'LAL175', 'LAL134', 'VES041', 'PS018', 'PS059', 'CRE015', 'LAL200', 'PVLP004', 'LAL040', 'LAL123', 'LAL018', 'LAL084', 'VES059', 'LAL011', 'LAL014', 'IB048', 'ATL007', 'VES005', 'PFL3', 'PFL2', 'LAL041', 'DNa08', 'PS013', 'LAL113', 'VES054', 'LAL021', 'LAL003', 'LC33b', 'CRE014', 'DNb01', 'LAL077', 'LAL045', 'CRE040', 'CRE013', 'LAL083', 'LAL046', 'PS011')
+
+# MZ_syns = c('CRE012(ADM05)','LAL041', 'LAL051',  'LAL113', 'LAL201(SCB023)', 'PPM1205'  )
+
+GABA =  c('LAL113','LAL051','LAL138', 'LAL040', 'LAL046', 'LAL112', 'AOTU019', 'SAD013', 'PS077', 'MBON31', 'CRE021', 'LAL060', 'PS072', 'CRE013', 'PS049')
+
+Glutamate =  c('LT51', 'PLP009', 'LAL083', 'PS190', 'VES051', 'VES052', 'MBON32', 'PS186', 'PLP029', 'LAL053', 'PS137', 'LAL074', 'LAL084')
+
+ACh = c('LLPC1', 'DNp09', 'AOTU005', 'AOTU025', 'AOTU012', 'AOTU015', 'AOTU027', 'AOTU026', 'AOTU016', 'LAL026', 'PS044', 'IB076', 'VES074', 'LAL027', 'LAL028', 'AVLP370', 'LAL029', 'LAL181', 'VES007', 'PVLP142', 'LAL019', 'PS234', 'PS019', 'PS026', 'LAL186', 'LAL035', 'LAL012', 'VES076', 'LAL175', 'LAL010', 'PS013', 'PS230', 'LAL081', 'LAL032', 'PS235', 'PLP012', 'PS018', 'IB077', 'PS022', 'LAL196', 'LAL201', 'PFL3', 'CRE015', 'CRE014', 'LAL013', 'PS020', 'SAD005', 'SAD006', 'SAD007', 'LAL172', 'PS034', 'PS021', 'AVLP285', 'AVLP301', 'LAL174', 'LAL011', 'LAL018', 'DNa03', 'VES005', 'PS011')
+
+
+
+synapses = synapses %>% 
+  mutate(modality = case_when(
+    # partnerType %in% PFL3_syns ~ 'PFL3',
+    # partnerType %in% MZ_syns ~ 'MooSEZ',
+    partnerType %in% GABA ~ 'GABA',
+    partnerType %in% Glutamate ~ 'Glutamate',
+    partnerType %in% ACh ~ 'ACh',
+
+  ))
+
+
+```
+
+```{r}
+
+synapses
+
+```
+
+Separate pre from post synapses.
+
+```{r}
+synapsesPre = synapses %>% filter(prepost == 1)
+synapsesPost = synapses %>% filter(prepost == 0)
+
+```
+
+Modality colormap for plots
+
+```{r}
+orange = '#FFA500'
+magenta = '#FF00FF'
+
+lime = "#32CD32"
+
+
+# Vivid_Violet = "#AA0DFE"
+# green = "#A8E2A8"
+# Vivid_Blue = "#2ED9FF"
+# darker_Blue = '#5343EF'
+# pink = '#EF8F9F'
+# cyan = '#0ef0d2'
+
+modalityCMap =c(lime, orange, magenta)
+
+```
+
+Figure 12C - CDF of distributions of electrotonic distances between synapses and rootpoint (grouped by modality) for an example neuron.
+
+```{r}
+# if(nronType == 'DNa02_R'){
+#   egNum = 24
+#   nron_info_kept = nron_info[-exclude,]
+# } else {
+#   egNum = 1
+#   nron_info_kept = nron_info
+# }
+
+# c('all','WED', 'VES', 'SAD','PS','PLP', 'LT', 'OAVUMa1', 'DN', 'LAL', 'PFLs)
+#c('PFL3', 'MooSEZ')
+
+modalityCDFPlot = ggplot(filter(synapsesPre, bodyid == nron_info_kept$bodyid[egNum], modality %in% c('ACh', 'GABA', 'Glutamate')), aes(x = normEDist, color = modality)) +
+    stat_ecdf(geom = "step") +
+    scale_colour_manual(values = modalityCMap) +
+    theme_paper() +
+    labs(x = 'normalized electrotonic distance to rootpoint', y = 'CDF') + 
+  facet_wrap(~bodyid)
+
+if(savePlot){
+ggsave(paste('modalityCDF_', nronType, '_ED.pdf', sep = ""), plot = modalityCDFPlot, device='pdf', path = "NT_Inputs_to_DNa02")
+}
+
+```
+
+```{r}
+nron_info_kept$bodyid[egNum]
+```
+
+Figure 12 supplement 1E - CDF of distributions of raw distance along arbor between synapses and rootpoint (grouped by modality) for same example neuron.
+
+```{r}
+
+modalityCDFPlot = ggplot(filter(synapsesPre, bodyid == nron_info_kept$bodyid[egNum], modality %in% c('ACh', 'GABA', 'Glutamate')), aes(x = distToRoot, color = modality)) +
+    stat_ecdf(geom = "step") +
+    scale_colour_manual(values = modalityCMap) +
+    theme_paper() +
+    labs(x = 'distance to rootpoint', y = 'CDF') + 
+  facet_wrap(~bodyid)
+
+if(savePlot){
+ggsave(paste('modalityCDF_', nronType, '_RD.pdf', sep = ""), plot = modalityCDFPlot, device='pdf', path = "NT_Inputs_to_DNa02")
+}
+
+```
+
+## (4) Compare medians of electrotonic distance distributions of different modalities
+
+Calculate the medians.
+
+```{r}
+synapses
+```
+
+
+```{r}
+# medOfEDist_nronType = filter(synapses, prepost == 1, modality %in% c('ACh', 'GABA', 'Glutamate')) %>% 
+#   group_by(bodyid, partnerType) %>%
+#   summarize(med = median(normEDist)) %>% 
+#   mutate(eg = case_when(
+#     bodyid == nron_info_kept$bodyid[egNum] ~ 1,
+#     TRUE ~ 0
+#   ))
+
+medOfEDist = filter(synapses, prepost == 1) %>% group_by(partnerType, modality) %>%
+            summarize(med = median(normEDist)) %>%
+            filter(modality %in% c('ACh', 'GABA', 'Glutamate')) %>%
+            # group_by(bodyid) %>%
+            # mutate(rankOrder = rank(med)) %>%
+            # ungroup() %>% 
+            # mutate(eg = case_when(
+            #   bodyid == nron_info_kept$bodyid[egNum] ~ 1,
+            #   TRUE ~ 0
+            # )) %>% 
+            mutate(modNum = case_when(
+              modality == 'ACh' ~ 3,
+              modality == 'GABA' ~ 1,
+              modality == 'Glutamate' ~ 2
+           
+
+
+            )) 
+
+```
+
+
+```{r}
+# Calculate mean for the entire ACh group
+ACh_med <- mean(medOfEDist$med[medOfEDist$modality == "ACh"])
+
+# Calculate mean for the entire GABA group
+GABA_med <- mean(medOfEDist$med[medOfEDist$modality == "GABA"])
+
+# Calculate mean for the entire Glutamate group
+Glut_med <- mean(medOfEDist$med[medOfEDist$modality == "Glutamate"])
+
+```
+
+```{r}
+
+medHivePlot <- ggplot(medOfEDist) +
+  geom_point(aes(x = factor(modality, levels = c('ACh', 'GABA', 'Glutamate')), y = med, fill = modality, group = factor(partnerType)), color = 'black', pch = 21, position = position_dodge(0.5), size = 3, alpha = 0.75) +
+
+  geom_linerange(aes(x = factor(modality, levels = c('ACh', 'GABA', 'Glutamate')), ymin = quantile(med, 0.25), ymax = quantile(med, 0.75)), position = position_dodge(0.5), color = 'black') +
+
+  stat_summary(aes(x = factor(modality, levels = c('ACh', 'GABA', 'Glutamate')), y = med), fun = mean, geom = "crossbar", width = 0.5, position = position_dodge(0.5), fill = "black", color = "black") +
+
+  theme_bw() +
+  guides(fill = 'legend') +
+  scale_fill_manual(values = modalityCMap) +
+  scale_color_manual(values = c('lightgray','black',modalityCMap)) +
+  labs(x = 'modality', y = 'mean')
+
+if (savePlot) {
+  ggsave(paste('meanDists_hive_jitter_', nronType, '_ED.pdf', sep = ""), plot = medHivePlot, device='pdf', path = "NT_Inputs_to_DNa02")
+}
+
+(modalityCMap)
+```
+
+```{r}
+# Filter the synapses tibble for the three groups of interest
+synapses_subset <- synapses %>% filter(modality %in% c("ACh", "GABA", "Glutamate"))
+
+# Merge the dataframes based on the common columns x, y, and z
+merged_df <- merge(synapses_subset, DNa02_conn_info, by = c("x", "y", "z"), all.x = TRUE)
+
+# Create a new dataframe with the required columns
+new_df <- merged_df[!is.na(merged_df$order), c("treenode_id.x", "connector_id.x", "prepost.x", 
+                                                "x", "y", "z", "confidence.x", "bodyid.x", "partner.x",
+                                                "partnerType", "distToRoot", "electroDist", "rangeEDist", 
+                                                "normEDist", "modality", "order")]
+
+# Rename the columns to match the original dataframe
+colnames(new_df) <- c("treenode_id", "connector_id", "prepost", "x", "y", "z", "confidence", 
+                      "bodyid", "partner", "partnerType", "distToRoot", "electroDist", "rangeEDist", 
+                      "normEDist", "modality", "order")
+colnames(new_df)
+
+
+```
+
+
+Figure 12E (nronType = 'EPG') or Figure 12 supplement 3B (nronType = 'EL') - distributions of the medians of the electrotonic distance distributions for each modality
+
+```{r}
+# Filter the synapses tibble for the three groups of interest
+# synapses_subset <- synapses %>% filter(modality %in% c("ACh", "GABA", "Glutamate"))
+
+# Create the plot with overlaid KDEs for each modality
+plot_kde <- ggplot(new_df, aes(..scaled..,x = normEDist, color = modality, fill = modality)) +
+  geom_density(alpha = .25, trim = TRUE) +  # Overlaid KDEs for each modality
+  labs(x = "normEDist", y = "Density") +  # Axis labels
+  scale_fill_manual(values = c("ACh" = '#32CD32', "GABA"  = '#FFA500', "Glutamate" = '#FF00FF')) +  # Color mapping for fill
+  scale_color_manual(values = c("ACh" = '#32CD32', "GABA"  = '#FFA500', "Glutamate" = '#FF00FF')) +  # Color mapping for lines
+  theme_minimal()
+
+# Create the plot with histograms for each modality
+plot_hist <- ggplot(new_df, aes(x = normEDist, fill = modality)) +
+  geom_histogram(binwidth = 0.01, alpha = 0.5, position = "identity") +  # Histograms for each modality
+  labs(x = "normEDist", y = "Counts") +  # Axis labels
+  scale_fill_manual(values = c("ACh" = '#32CD32', "GABA"  = '#FFA500', "Glutamate" = '#FF00FF')) +  # Color mapping for fill
+  theme_classic()
+
+# Combine the plots side by side
+combined_plot <- plot_hist + medHivePlot
+
+# Print the combined plot
+print(combined_plot)
+
+if(savePlot){
+ggsave(paste('NT_distributions', nronType, '_ED.pdf', sep = ""), device='pdf', path = "NT_Inputs_to_DNa02")
+}
+
+```
+```{r}
+
+
+# Filter the synapses tibble for the three groups of interest
+# synapses_subset <- synapses %>% filter(modality %in% c("ACh", "GABA", "Glutamate"))
+
+# Iterate over unique values in the "order" column
+unique_orders <- unique(new_df$order)
+
+for (order_val in unique_orders) {
+  # Create a subset of the dataframe for the current "order" value
+  subset_df <- subset(new_df, order == order_val)
+  
+  # Create the plot with overlaid KDEs for each modality
+  plot_kde <- ggplot(subset_df, aes(..scaled.., x = normEDist, color = modality, fill = modality)) +
+    geom_density(alpha = .25, trim = TRUE) +  # Overlaid KDEs for each modality
+    labs(x = "normEDist", y = "Density") +  # Axis labels
+    scale_fill_manual(values = c("ACh" = '#32CD32', "GABA"  = '#FFA500', "Glutamate" = '#FF00FF')) +  # Color mapping for fill
+    scale_color_manual(values = c("ACh" = '#32CD32', "GABA"  = '#FFA500', "Glutamate" = '#FF00FF')) +  # Color mapping for lines
+    theme_minimal() +
+    ggtitle(paste("Order:", order_val))  # Title with current "order" value
+  
+  # Create the plot with histograms for each modality
+  plot_hist <- ggplot(subset_df, aes(x = normEDist, fill = modality)) +
+    geom_histogram(binwidth = 0.01, alpha = 0.5, position = "identity") +  # Histograms for each modality
+    labs(x = "normEDist", y = "Counts") +  # Axis labels
+    scale_fill_manual(values = c("ACh" = '#32CD32', "GABA"  = '#FFA500', "Glutamate" = '#FF00FF')) +  # Color mapping for fill
+    theme_classic() +
+    ggtitle(paste("Order:", order_val))  # Title with current "order" value
+  
+  # Arrange the plots side by side
+  # combined_plots <- grid.arrange(plot_hist, plot_kde, ncol = 2)
+  
+  # Save the combined plots
+  ggsave(paste0('NT_plots_', nronType, '_ED_order_', order_val, '.pdf'), 
+         plot = plot_hist, device = "pdf", path = "NT_Inputs_to_DNa02")
+}
+
+
+
+```
+
+
+```{r}
+# Filter the synapses tibble for the three groups of interest
+synapses_subset <- synapses %>% filter(modality %in% c("ACh", "GABA", "Glutamate"))
+
+# Merge the dataframes based on the common columns x, y, and z
+merged_df <- merge(synapses_subset, DNa02_conn_info, by = c("x", "y", "z"), all.x = TRUE)
+
+# Create a new dataframe with the required columns
+new_df <- merged_df[!is.na(merged_df$order), c("treenode_id.x", "connector_id.x", "prepost.x", 
+                                                "x", "y", "z", "confidence.x", "bodyid.x", "partner.x",
+                                                "partnerType", "distToRoot", "electroDist", "rangeEDist", 
+                                                "normEDist", "modality", "order")]
+
+# Rename the columns to match the original dataframe
+colnames(new_df) <- c("treenode_id", "connector_id", "prepost", "x", "y", "z", "confidence", 
+                      "bodyid", "partner", "partnerType", "distToRoot", "electroDist", "rangeEDist", 
+                      "normEDist", "modality", "order")
+colnames(new_df)
+
+
+```
+
+
+Figure 12E (nronType = 'EPG') or Figure 12 supplement 3B (nronType = 'EL') - distributions of the medians of the electrotonic distance distributions for each modality
+
+```{r}
+# Filter the synapses tibble for the three groups of interest
+# synapses_subset <- synapses %>% filter(modality %in% c("ACh", "GABA", "Glutamate"))
+
+# Create the plot with overlaid KDEs for each modality
+plot_kde <- ggplot(new_df, aes(..scaled..,x = normEDist, color = modality, fill = modality)) +
+  geom_density(alpha = .25, trim = TRUE) +  # Overlaid KDEs for each modality
+  labs(x = "normEDist", y = "Density") +  # Axis labels
+  scale_fill_manual(values = c("ACh" = '#32CD32', "GABA"  = '#FFA500', "Glutamate" = '#FF00FF')) +  # Color mapping for fill
+  scale_color_manual(values = c("ACh" = '#32CD32', "GABA"  = '#FFA500', "Glutamate" = '#FF00FF')) +  # Color mapping for lines
+  theme_minimal()
+
+# Create the plot with histograms for each modality
+plot_hist <- ggplot(new_df, aes(x = normEDist, fill = modality)) +
+  geom_histogram(binwidth = 0.01, alpha = 0.5, position = "identity") +  # Histograms for each modality
+  labs(x = "normEDist", y = "Counts") +  # Axis labels
+  scale_fill_manual(values = c("ACh" = '#32CD32', "GABA"  = '#FFA500', "Glutamate" = '#FF00FF')) +  # Color mapping for fill
+  theme_classic()
+
+# Combine the plots side by side
+combined_plot <- plot_hist + medHivePlot
+
+# Print the combined plot
+print(combined_plot)
+
+if(savePlot){
+ggsave(paste('NT_distributions', nronType, '_ED.pdf', sep = ""), device='pdf', path = "NT_Inputs_to_DNa02")
+}
+
+```
+
+
+```{r}
+
+
+# Filter the synapses tibble for the three groups of interest
+# synapses_subset <- synapses %>% filter(modality %in% c("ACh", "GABA", "Glutamate"))
+
+# Iterate over unique values in the "order" column
+unique_orders <- unique(new_df$order)
+
+for (order_val in unique_orders) {
+  # Create a subset of the dataframe for the current "order" value
+  subset_df <- subset(new_df, order == order_val)
+  
+  # Create the plot with overlaid KDEs for each modality
+  plot_kde <- ggplot(subset_df, aes(..scaled.., x = normEDist, color = modality, fill = modality)) +
+    geom_density(alpha = .25, trim = TRUE) +  # Overlaid KDEs for each modality
+    labs(x = "normEDist", y = "Density") +  # Axis labels
+    scale_fill_manual(values = c("ACh" = '#32CD32', "GABA"  = '#FFA500', "Glutamate" = '#FF00FF')) +  # Color mapping for fill
+    scale_color_manual(values = c("ACh" = '#32CD32', "GABA"  = '#FFA500', "Glutamate" = '#FF00FF')) +  # Color mapping for lines
+    theme_minimal() +
+    ggtitle(paste("Order:", order_val))  # Title with current "order" value
+  
+  # Create the plot with histograms for each modality
+  plot_hist <- ggplot(subset_df, aes(x = normEDist, fill = modality)) +
+    geom_histogram(binwidth = 0.01, alpha = 0.5, position = "identity") +  # Histograms for each modality
+    labs(x = "normEDist", y = "Counts") +  # Axis labels
+    scale_fill_manual(values = c("ACh" = '#32CD32', "GABA"  = '#FFA500', "Glutamate" = '#FF00FF')) +  # Color mapping for fill
+    theme_classic() +
+    ggtitle(paste("Order:", order_val))  # Title with current "order" value
+  
+
+  # Arrange the plots side by side
+  combined_plots <- grid.arrange(plot_hist, plot_kde, ncol = 2)
+  
+  # Save the combined plots
+  ggsave(paste0('swarm_strahler_order_dna02_inputs', nronType, '_ED_order_', order_val, '.pdf'), 
+         plot = combined_plots, device = "pdf", path = "NT_Inputs_to_DNa02")
+}
+
+
+
+```
+
+```{r}
+for (order_val in unique_orders) {
+  # Create a subset of the dataframe for the current "order" value
+  subset_df <- subset(new_df, order == order_val)
+  
+  label = (order_val)
+
+# Create the plot with swarm plots for each modality
+  plot_swarm <- ggplot(subset_df, aes(x = modality, y = normEDist, color = modality)) +
+    geom_beeswarm(cex = .75) +
+    stat_summary(fun.data = "median_hilow", geom = "crossbar", width = 0.5, fatten = 2, color = "black") +
+    stat_summary(fun.data = "mean_cl_boot", geom = "errorbar", width = 0.2, color = "black")+
+    scale_color_manual(values = c("ACh" = '#32CD32', "GABA"  = '#FFA500', "Glutamate" = '#FF00FF'))+  # Color mapping for lines
+    ggtitle( paste( "Strahler Order ", order_val))
+  
+#   # Calculate pairwise Mann-Whitney U tests
+#   pairwise_tests <- pairwise.wilcox.test(subset_df$normEDist, subset_df$modality, p.adjust.method = "bonferroni")
+# 
+# # Print the pairwise comparisons and p-values
+#   print(pairwise_tests)
+
+
+  print(plot_swarm)
+# Save the combined plots
+  ggsave(paste0('swarm_strahler_order_dna02_inputs', nronType, '_ED_order_', order_val, '.pdf'), 
+       plot = plot_swarm, device = "pdf", path = "NT_Inputs_to_DNa02")
+}
+```
+
+```{r}
+# Assuming you have already loaded your data and have it stored in 'new_df'
+
+# Convert 'order' variable to factor and specify the order of levels
+new_df$order <- factor(new_df$order, levels = 1:7)
+
+# Aggregate data to calculate meanEDist for each modality and Strahler order
+agg_df <- aggregate(normEDist ~ modality + order, data = new_df, FUN = mean)
+
+# Sort the data by order within each modality
+agg_df <- agg_df[order(agg_df$order),]
+
+# Plot the data
+plot_mean_strahler <- ggplot(agg_df, aes(x = order, y = normEDist, color = modality, group = modality)) +
+  geom_point() +
+  geom_path() +
+  scale_color_manual(values = c("ACh" = '#32CD32', "GABA" = '#FFA500', "Glutamate" = '#FF00FF')) +
+  ggtitle("Mean Strahler Order by Modality of DNa02 Inputs") +
+  labs(x = "Strahler Order", y = "MeanEDist")
+
+print(plot_mean_strahler)
+ggsave(filename = "plot_mean_strahler_order.svg", plot = plot_mean_strahler, device = "svg", path = "C:/Users/crharder/Documents/DTE Lab/Figures/plot_mean_strahler_order")
+
+
+
+
+
+```
+
+```{r}
+
+# Iterate over unique values in the "order" column
+unique_orders <- unique(new_df$order)
+
+for (order_val in unique_orders) {
+  # Create a subset of the dataframe for the current "order" value
+  subset_df <- subset(new_df, order == order_val)
+
+  label = (order_val)
+
+# Create the plot with swarm plots for each modality
+plot_swarm <- ggplot(new_df, aes(x = modality, y = normEDist, color = modality, xlim = 1)) +
+  geom_beeswarm(cex = .75) +
+  stat_summary(fun.data = "median_hilow", geom = "crossbar", width = 0.5, fatten = 2, color = "black") +
+  stat_summary(fun.data = "mean_cl_boot", geom = "errorbar", width = 0.2, color = "black") +
+  scale_color_manual(values = c("ACh" = '#32CD32', "GABA"  = '#FFA500', "Glutamate" = '#FF00FF')) +  # Color mapping for lines
+  ggtitle("Swarm Plots for Different Strahler Orders") +
+  facet_wrap(~ order, scales = "free_x", ncol = 1)  # Facet by order, with a single column
+
+  print(plot_swarm)
+
+  # Save the combined plots
+  ggsave(paste0('swarm_strahler_order_dna02_inputs', nronType, '_ED_order_', order_val, '.pdf'),
+         plot = plot_swarm, device = "pdf", path = "NT_Inputs_to_DNa02")
+}
+
+
+```
+
+
+```{r}
+order_val
+```
+
+```{r}
+colnames(subset_df)
+
+```
+
+
+```{r}
+#Add in the synaptic locations and determine their Strahler order
+
+DNa02_nron_w_conns <- neuprint_read_neurons("1140245595", connectors = TRUE)$'1140245595'
+strahler_info_w_conns <- strahler_order(DNa02_nron_w_conns)
+DNa02_conn_info <- DNa02_nron_w_conns$connectors %>% mutate(partner_type = neuprint_get_meta(partner)$type)
+DNa02_conn_info$order <- lapply(DNa02_conn_info$treenode_id, function(x) strahler_info_w_conns$points[x]) %>% unlist()
+#Determine and plot the Strahler order of the branches
+
+sg <- segmentgraph(DNa02_nron_w_conns)
+strahler_info <- strahler_order(DNa02_nron_w_conns)
+E(sg)$order <- strahler_info$segments
+order_cols <- viridis::inferno(max(E(sg)$order))
+E(sg)$color <- lapply(E(sg)$order, function(x) order_cols[x]) %>% unlist()
+
+# plot.igraph(sg, layout=layout_as_tree, edge.arrow.size = 0, vertex.size = 0.01, vertex.color = 'black',vertex.label = NA, arrow.mode = 0)
+
+```
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+```
+

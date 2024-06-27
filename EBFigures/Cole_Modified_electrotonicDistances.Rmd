@@ -32,6 +32,8 @@ library(tidyr)
 library(dplyr)
 library(neuprintrExtra)
 source(file.path("..","R","SynapsePCAUtils.R"))
+
+nronType = "DNa02"
 ```
 
 ```{r, message=FALSE, warning=FALSE}
@@ -51,62 +53,239 @@ Indicate if you would like to save the plots here (default is false). Plots will
 ```{r}
 savePlot = TRUE
 if (savePlot){
-  dir.create("plots")
+  dir.create("cole_plots")
 }
 ```
 
 ## (1) Load in neurons and prepare them for analysis
 
-Choose which neuron type to analyze electrotonic distances on. \* Figure 12, Figure 12 supplement 1, Figure 12 supplement 2: set nronType = 'EPG' \* Figure 12 supplement 3: set nronType = 'EL'
+Choose which neuron type to analyze electrotonic distances on.
 
 ```{r neuron info}
 # neurons for which you care about the synaptic locations
-nronType = 'EL'
-nron_info = neuprint_search(paste(".*", nronType, ".*", sep = ""))
+nron_info = neuprint_search("DNa02", field = "type", fixed=TRUE, exact = FALSE)
+
+# neuprint_search("DNa02", field = "type", fixed=TRUE, exact = FALSE)
+```
+
+```{r}
+dn = neuprint_connection_table("DNa02", partners='in', summary=TRUE, details=TRUE)
+(dn)
+sort(unique(dn$name))
+
+
 ```
 
 ```{r}
 # synaptic partners you're interested in
-partner_info = neuprint_search(".*ring.*")
-head(partner_info)
-unique(partner_info$type)
-
-partner_info = rbind(partner_info,neuprint_search(".*PEG.*"))
-partner_info = rbind(partner_info, neuprint_search((".*PEN.*")))
-partner_info = rbind(partner_info, neuprint_search(".*EPG.*"))
+partner_info = neuprint_search(".*PFL.*")
+# hss = neuprint_ids("2179731270")
+# (hss)
 (partner_info)
-unique(partner_info$type)
+unique(partner_info$name)
+partner_info = rbind(partner_info, neuprint_search((".*LAL046_R*")))
+partner_info = rbind(partner_info, neuprint_search((".*LAL018_R*")))
+partner_info = rbind(partner_info, neuprint_search((".*PS049_R*")))
+partner_info = rbind(partner_info, neuprint_search((".*VES009_R*")))
+partner_info = rbind(partner_info, neuprint_search((".*DNa03_R*")))
+partner_info = rbind(partner_info, neuprint_search((".*PS013_R*")))
+partner_info = rbind(partner_info, neuprint_search((".*VES008_R*")))
+partner_info = rbind(partner_info, neuprint_search((".*PS059_R*")))
+partner_info = rbind(partner_info, neuprint_search((".*LAL010_R*")))
+partner_info = rbind(partner_info, neuprint_search((".*HSS LPTC*")))
+partner_info = rbind(partner_info, neuprint_search((".*H2 LPTC_R*")))
+partner_info = rbind(partner_info, neuprint_search((".*H2 LPTC_L*")))
+partner_info = rbind(partner_info, neuprint_search((".*HSN LPTC*")))
+partner_info = rbind(partner_info, neuprint_search((".*HSE LPTC*")))
+partner_info = rbind(partner_info, neuprint_search((".*CRE012(ADM05)_L*")))
+partner_info = rbind(partner_info, neuprint_search((".*LAL041_R*")))
+partner_info = rbind(partner_info, neuprint_search((".*LAL051_R*")))
+partner_info = rbind(partner_info, neuprint_search((".*LAL113_R*")))
+partner_info = rbind(partner_info, neuprint_search((".*LAL201(SCB023)_R*")))
+partner_info = rbind(partner_info, neuprint_search((".*PPM1205_R*")))
 
-# set this to NULL if you want to consider all synapses
-#partner_info = NULL
+
+
+
+
+
+
+	
+
+# partner_info = rbind(partner_info, neuprint_ids("5813046185")) #MooSEZ
+(partner_info)
+sort(unique(partner_info$name))
+# 
+# # set this to NULL if you want to consider all synapses
+# partner_info = NULL
+# mz = neuprint_ids("5813046185", all_segments = True)
+# head(mz)
+
 ```
 
 Read in the neurons we care about. This might take a while depending on how many neurons you're trying to load in, so if there are ones you know you don't want to consider, include their index in the exclude list.
 
 ```{r read in neurons}
 
-if(nronType == 'EPG'){
-  epgt = grep('EPGt',nron_info$name)
-  epgR1 = grep('R1',nron_info$name)
-  exclude = unique(c(epgt, epgR1))
-} else {
-  exclude = c()
-}
+# if(nronType == 'PFL'){
+#   pfl3 = grep('PFL3',nron_info$name)
+#   pfl2 = grep('PFL2',nron_info$name)
+#   pfl1 = grep('PFL1',nron_info$name)
+# 
+#   exclude = unique(c(NPFL1-I))
+# } else {
+#   exclude = c()
+# }
+# 
+# 
+# # if(nronType == 'PFL3'){
+# #   pfl3 = grep('PFL3',nron_info$type)
+# # } else {
+# #   exclude = c()
+# # }
+# # 
+# # if(nronType == 'PFL2'){
+# #   pfl2 = grep('PFL2',nron_info$type)
+# # } else {
+# #   exclude = c()
+# # }
+# 
+# if(nronType == 'LAL046_R'){
+#   lal46 = grep('LAL046_R',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# 
+# if(nronType == 'LAL018_R'){
+#   lal18 = grep('LAL018_R',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# 
+# if(nronType == 'PS049_R'){
+#   ps049 = grep('PS049_R',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# if(nronType == 'VES009_R'){
+#   ves009 = grep('VES009_R',nron_info$name)
+#   exclude = unique(c(epgt, epgR1))
+# } else {
+#   exclude = c()
+# }
+# if(nronType == 'DNa03_R'){
+#   dna03 = grep('DNa03_R',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# if(nronType == 'PS013_R'){
+#   ps013 = grep('PS013_R',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# if(nronType == 'VES008_R'){
+#   ves008 = grep('VES008_R',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# if(nronType == 'PS059_R'){
+#   ps059 = grep('PS059_R',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# if(nronType == 'LAL010_R'){
+#   lal010 = grep('LAL010_R',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# 
+# if(nronType == 'HSS LPTC'){
+#   hss = grep('HSS LPTC',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# 
+# if(nronType == 'H2 LPTC_R'){
+#   h2_r = grep('H2 LPTC_R',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# 
+# if(nronType == 'H2 LPTC_L'){
+#   h2_l = grep('H2 LPTC_L',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# 
+# if(nronType == 'HSN LPTC'){
+#   hsn = grep('HSN LPTC',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# 
+# if(nronType == 'HSE LPTC'){
+#   hse = grep('HSE LPTC',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# 
+# if(nronType == 'CRE012(ADM05)_L'){
+#   cre012 = grep('CRE012(ADM05)_L',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# 
+# if(nronType == 'LAL041_R'){
+#   lal041 = grep('LAL041_R',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# 
+# if(nronType == 'LAL051_R'){
+#   lal051 = grep('LAL051_R',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# 
+# if(nronType == 'LAL113_R'){
+#   lal113 = grep('LAL113_R',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# 
+# if(nronType == 'LAL201(SCB023)_R'){
+#   lal201 = grep('LAL201(SCB023)_R',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# 
+# if(nronType == 'PPM1205_R'){
+#   ppm1205 = grep('PPM1205_R',nron_info$name)
+# } else {
+#   exclude = c()
+# }
+# 
+# 
+# exclude
+
+
 
 if(is.null(exclude)){
   nronList = neuprint_read_neurons(nron_info$bodyid)
 } else {
   nronList = neuprint_read_neurons(nron_info$bodyid[-exclude])
 }
+
+
 ```
 
 Find neurons with disoriented graphs (needed for EPGs, not ELs). - intersect each neuron with each significant ROI - find shortest path between points in each ROI to rootpoint - shortest path of these tells you which ROI the rootpoint is closest too
 
 ```{r}
-if(nronType == 'EPG'){
+if(nronType == 'DNa02'){
 
-# Significant ROIs for EPGs
-sigROI = c('EB','PB')
+# Significant ROIs for DNa02 microcircuit
+sigROI = c('LAL(R)', 'IPS(R)', 'GNG')
 sigROI_mesh = lapply(sigROI, FUN = neuprint_ROI_mesh)
 
 distancesDF = data.frame()
@@ -175,15 +354,44 @@ nron_synapses = lapply(nron_synapses, function(syn){
 Intersect neuron and synapses with EB.
 
 ```{r subsetting neuron}
-mainROI = 'EB'
+mainROI <- ('LAL(R)')
+
+# # Add element at the end of the list.
+# mainROI <- append(mainROI,'LAL(R)',after=1)
+
+
+
+mainROI
 mainROI_mesh = neuprint_ROI_mesh(roi = mainROI)
+
 
 nronMainROI = nlapply(nronList, function(nron,mesh) subset(nron, pointsinside(nron, surf = mesh)), mesh = mainROI_mesh)
 
+
 nronMainROI_synapses = lapply(nron_synapses, function(n,mesh) subset(n, pointsinside(n, surf = mesh)), mesh = mainROI_mesh)
+
+
 ```
 
-Intersecting the neuron with the EB ROI often "fractures" the neuron (i.e., the associated graph is no longer connected). To fix this, we will first build up the neuron's graph until the fractures are healed, We will then prune the graph back down so that we retain only those vertices that are needed to keep the graph connected.
+```{r}
+
+
+# nronMainROI1_synapses
+# nronMainROI2_synapses$'1140245595'$connector_id
+
+# nronMainROI2_synapses
+
+# nronMainROI_synapses = merge(x = nronMainROI1_synapses$'1140245595', y = nronMainROI2_synapses$'1140245595', by = "connectorid")
+nronMainROI_synapses
+```
+
+Intersecting the neuron with the EB ROI often "fractures" the neuron (i.e., the associated graph is no longer connected). To fix this, we will first build up the neuron's graph until the fractures are healed, We
+
+```{r pull the list of callable ROI meshes}
+#neuprint_ROIs(fromNeuronFields=T, superLevel = NULL)
+```
+
+will then prune the graph back down so that we retain only those vertices that are needed to keep the graph connected.
 
 Once the graph is fixed, we can identify an appropriate rootpoint for each neuron to indicate the putative spike initiation zone.
 
@@ -294,9 +502,12 @@ Now that we have these functions, we can use them to fix the graphs (this will t
 nronGraphs = mapply(buildGraph, nronList, nronMainROI, nronMainROI_synapses, SIMPLIFY = F)
 ```
 
-```{r warning = F}
-# prune graphs down on the root side
+```{r}
+# #prune graphs down on the root side 
+# { warning = F}
+# 
 # nronGraphs = mapply(pruneGraph, nronGraphs, nronList, nronMainROI_synapses, SIMPLIFY = F)
+
 ```
 
 Update the subsetted neurons now that we have the correct graphs for them.
@@ -311,10 +522,10 @@ Figure 12A - example neuron and rootpoint.
 
 ```{r}
 if(savePlot){
-  pdf(paste('plots/example', nronType, '_RP.pdf', sep=""))
+  pdf(paste('cole_plots/example', nronType, '_RP.pdf', sep=""))
 }
 
-exInd = 2
+exInd = 1
 nron = nronList[[exInd]]
 rp = nronMainROI[[exInd]]$d[rootpoints(nronMainROI[[exInd]]),]
 egNronPlot = plot(nron, WithNodes = F)
@@ -394,27 +605,158 @@ Group synaptic partners of interest into groups of different input modalities. T
 
 ```{r}
 
-ms = c('ER1_a','ER1_b')
-cv = c('ER3a_a','ER3a_c','ER3m','ER3p_a','ER3p_b')
-iv = c('ER2_a','ER2_b','ER2_c','ER2_d','ER3w', 'ER4d','ER4m')
-sleep = c('ER3d_a','ER3d_b','ER3d_c','ER3d_d','ER5')
-other = c('ER6')
-ex = c('ExR1','ExR2','ExR3','ExR4','ExR5','ExR6','ExR7','ExR8')
-motor = c('PEN_a(PEN1)','PEN_b(PEN2)')
-rec = c('EPG','EPGt','PEG')
-remove = c('ER3a_b','ER3a_d')
+PFLs = c('PFL3', 'PFL2','PFL1')
+LAL = c('LAL046', 'LAL018', 'LAL010')
+DNa03 = c('DNa03')
+Vest = c('VES008', 'VES009')
+Posterior_Slope = c('PS013', 'PS049', 'PS059')
+HSS = c('HSS')
+H2 = c('H2')
+HSN = c('HSN')
+HSE = c('HSE')
+MZ_inter = c('CRE012(ADM05)','LAL041', 'LAL051',  'LAL113', 'LAL201(SCB023)', 'PPM1205'  )
+all = c('PS049', 
+'VES009', 
+'DNa03', 
+'LAL018', 
+'LAL046', 
+'PS013', 
+'AOTU019', 
+'VES008', 
+'PS059', 
+'AOTU025', 
+'LAL010', 
+'PS011', 
+'AOTU012', 
+'LAL040', 
+'IB068', 
+'PS230', 
+'PS186', 
+'LAL011', 
+'VES051', 
+'PLP242', 
+'LAL120', 
+'PS018', 
+'AOTU015', 
+'VES052', 
+'PLP029', 
+'AOTU005', 
+'CRE015', 
+'LAL081', 
+'PS090', 
+'LAL027', 
+'LAL028', 
+'LAL051', 
+'PS183', 
+'PLP012', 
+'VES070', 
+'LAL030_a', 
+'LAL026', 
+'MBON32', 
+'SIP023', 
+'VES007', 
+'LAL029', 
+'AOTU016', 
+'LT51', 
+'PFL3', 
+'PS039', 
+'SAD006', 
+'VES005', 
+'CRE013', 
+'SAD005', 
+'LAL123', 
+'LAL172', 
+'AOTU026', 
+'CRE014', 
+'IB077', 
+'PS020', 
+'WED069', 
+'LAL201', 
+'AOTU027', 
+'PS034', 
+'LAL084', 
+'PS077', 
+'LAL013', 
+'LAL124', 
+'PS137', 
+'LAL175', 
+'IB023', 
+'LAL060', 
+'LAL171', 
+'LAL181', 
+'PS022', 
+'HSS', 
+'LAL174', 
+'AVLP285', 
+'AVLP301', 
+'LAL135', 
+'LAL041', 
+'LAL054', 
+'PPM1205', 
+'SAD008', 
+'CRE021', 
+'LAL053', 
+'LAL186', 
+'LAL074', 
+'LAL113', 
+'LAL173', 
+'CL060', 
+'LAL025', 
+'SIP022', 
+'CRE012', 
+'DNp09', 
+'LAL024', 
+'LAL112', 
+'OA-VUMa1', 
+'PLP009', 
+'PS021', 
+'PS026', 
+'SAD007', 
+'LAL035', 
+'LAL106', 
+'LT82a', 
+'PS019', 
+'PS057', 
+'PS189', 
+'VES074', 
+'LAL012', 
+'LAL107', 
+'PVLP048', 
+'AOTU017', 
+'IB076', 
+'PS190', 
+'AVLP299_c', 
+'LAL003', 
+'LAL144', 
+'LAL183', 
+'LAL204', 
+'MBON31', 
+'PS234', 
+'PS261' )
+
+
+
+
+# H_system = c('HSS', 'H2', 'HSN', 'HSE')
+# mz = c('5813046185')
+
+# (H_system)
 
 synapses = synapses %>% 
   mutate(modality = case_when(
-    partnerType %in% ms ~ 'ms',
-    partnerType %in% cv ~ 'cv',
-    partnerType %in% iv ~ 'iv',
-    partnerType %in% sleep ~ 'sleep',
-    partnerType %in% other ~ 'other',
-    partnerType %in% ex ~ 'ex',
-    partnerType %in% motor ~ 'motor',
-    partnerType %in% rec ~ 'rec',
-    partnerType %in% remove ~ 'exclude'
+    partnerType %in% PFLs ~ 'PFLs',
+    partnerType %in% LAL ~ 'LAL',
+    partnerType %in% DNa03 ~ 'DNa03',
+    partnerType %in% Vest ~ 'Vest',
+    partnerType %in% Posterior_Slope ~ 'Posterior_Slope',
+    partnerType %in% HSS ~ 'HSS',
+    partnerType %in% H2 ~ 'H2',
+    partnerType %in% HSN ~ 'HSN',
+    partnerType %in% HSE ~ 'HSE', 
+    partnerType %in% MZ_inter ~ 'MZ_inter',
+    partnerType %in% all ~ 'all'
+    
+
   ))
 
 
@@ -437,22 +779,26 @@ green = "#A8E2A8"
 Vivid_Blue = "#2ED9FF"
 darker_Blue = '#5343EF'
 pink = '#EF8F9F'
+cyan = '#0ef0d2'
 
-modalityCMap =c(green,Vivid_Blue,Vivid_Violet,pink,darker_Blue)
+modalityCMap =c(green,Vivid_Blue,Vivid_Violet,pink,darker_Blue, cyan, cyan, cyan)
+
 ```
 
 Figure 12C - CDF of distributions of electrotonic distances between synapses and rootpoint (grouped by modality) for an example neuron.
 
 ```{r}
-if(nronType == 'EPG'){
-  egNum = 24
+if(nronType == 'PFL'){
+  egNum = 4
   nron_info_kept = nron_info[-exclude,]
 } else {
   egNum = 1
   nron_info_kept = nron_info
 }
 
-modalityCDFPlot = ggplot(filter(synapsesPre, bodyid == nron_info_kept$bodyid[egNum], modality %in% c('cv','iv','motor','ms','sleep')), aes(x = normEDist, color = modality)) +
+# c('PFLs', 'LAL', 'Vest','Posterior_Slope', 'DNa03', 'HSS', 'HSE', 'MZ_inter')
+
+modalityCDFPlot = ggplot(filter(synapsesPre, bodyid == nron_info_kept$bodyid[egNum], modality %in% c('all','LAL', 'PFLs', 'DNa03', 'MZ_inter')), aes(x = normEDist, color = modality)) +
     stat_ecdf(geom = "step") +
     scale_colour_manual(values = modalityCMap) +
     theme_paper() +
@@ -460,15 +806,20 @@ modalityCDFPlot = ggplot(filter(synapsesPre, bodyid == nron_info_kept$bodyid[egN
   facet_wrap(~bodyid)
 
 if(savePlot){
-ggsave(paste('modalityCDF_', nronType, '_ED.pdf', sep = ""), plot = modalityCDFPlot, device='pdf', path = "plots")
+ggsave(paste('modalityCDF_', nronType, '_ED.pdf', sep = ""), plot = modalityCDFPlot, device='pdf', path = "cole_plots")
 }
+
+```
+
+```{r}
+nron_info_kept$bodyid[egNum]
 ```
 
 Figure 12 supplement 1E - CDF of distributions of raw distance along arbor between synapses and rootpoint (grouped by modality) for same example neuron.
 
 ```{r}
 
-modalityCDFPlot = ggplot(filter(synapsesPre, bodyid == nron_info_kept$bodyid[egNum], modality %in% c('cv','iv','motor','ms','sleep')), aes(x = distToRoot, color = modality)) +
+modalityCDFPlot = ggplot(filter(synapsesPre, bodyid == nron_info_kept$bodyid[egNum], modality %in% c('PFLs', 'DNa03', 'MZ_inter')), aes(x = distToRoot, color = modality)) +
     stat_ecdf(geom = "step") +
     scale_colour_manual(values = modalityCMap) +
     theme_paper() +
@@ -476,7 +827,7 @@ modalityCDFPlot = ggplot(filter(synapsesPre, bodyid == nron_info_kept$bodyid[egN
   facet_wrap(~bodyid)
 
 if(savePlot){
-ggsave(paste('modalityCDF_', nronType, '_RD.pdf', sep = ""), plot = modalityCDFPlot, device='pdf', path = "plots")
+ggsave(paste('modalityCDF_', nronType, '_RD.pdf', sep = ""), plot = modalityCDFPlot, device='pdf', path = "cole_plots")
 }
 
 ```
@@ -486,7 +837,7 @@ ggsave(paste('modalityCDF_', nronType, '_RD.pdf', sep = ""), plot = modalityCDFP
 Calculate the medians.
 
 ```{r}
-medOfEDist_nronType = filter(synapses, prepost == 1, modality %in% c('cv','iv','motor','ms','sleep')) %>% 
+medOfEDist_nronType = filter(synapses, prepost == 1, modality %in% c('PFLs', 'DNa03', 'MZ_inter')) %>% 
   group_by(bodyid, partnerType) %>%
   summarize(med = median(normEDist)) %>% 
   mutate(eg = case_when(
@@ -496,7 +847,7 @@ medOfEDist_nronType = filter(synapses, prepost == 1, modality %in% c('cv','iv','
 
 medOfEDist = filter(synapses, prepost == 1) %>% group_by(bodyid, modality) %>%
             summarize(med = median(normEDist)) %>%
-            filter(modality %in% c('cv','iv','motor','ms','sleep')) %>%
+            filter(modality %in% c('PFLs', 'DNa03', 'MZ_inter')) %>%
             group_by(bodyid) %>%
             mutate(rankOrder = rank(med)) %>%
             ungroup() %>% 
@@ -505,11 +856,14 @@ medOfEDist = filter(synapses, prepost == 1) %>% group_by(bodyid, modality) %>%
               TRUE ~ 0
             )) %>% 
             mutate(modNum = case_when(
-              modality == 'motor' ~ 1,
-              modality == 'ms' ~ 2,
-              modality == 'iv' ~ 3,
-              modality == 'cv' ~ 4,
-              modality == 'sleep' ~ 5
+              modality == 'PFL3' ~ 1,
+              modality == 'PFL2' ~ 1,
+              modality == 'PFL1' ~ 1,
+              modality == 'DNa03' ~ 2,
+              modality == 'MZ_inter' ~ 3,
+
+      
+
             )) 
 
 ```
@@ -518,8 +872,8 @@ Figure 12E (nronType = 'EPG') or Figure 12 supplement 3B (nronType = 'EL') - dis
 
 ```{r}
   medHivePlot = ggplot(medOfEDist) +
-  geom_line(aes(x = factor(modality, levels = c('motor','ms','iv','cv','sleep')), y = med,  group = factor(bodyid), color = factor(eg)), position = position_dodge(0.5), size = 0.5) +
-  geom_point(aes(x = factor(modality, levels = c('motor','ms','iv','cv','sleep')), y = med, fill = modality, group = factor(bodyid)), color = 'black', pch = 21, position = position_dodge(0.5), size = 3, alpha = 0.75) +
+  geom_line(aes(x = factor(modality, levels = c('PFLs', 'DNa03', 'MZ_inter')), y = med,  group = factor(bodyid), color = factor(eg)), position = position_dodge(0.5), size = 0.5) +
+  geom_point(aes(x = factor(modality, levels = c('PFLs', 'DNa03', 'MZ_inter')), y = med, fill = modality, group = factor(bodyid)), color = 'black', pch = 21, position = position_dodge(0.5), size = 3, alpha = 0.75) +
   theme_paper() +
   guides(fill = 'legend') +
   scale_fill_manual(values = modalityCMap) +
@@ -527,8 +881,9 @@ Figure 12E (nronType = 'EPG') or Figure 12 supplement 3B (nronType = 'EL') - dis
   labs(x = 'modality', y = 'median') 
   
 if(savePlot){
-ggsave(paste('medianDists_hive_jitter_', nronType, '_ED.pdf', sep = ""), plot = medHivePlot, device='pdf', path = "plots")
+ggsave(paste('medianDists_hive_jitter_', nronType, '_ED.pdf', sep = ""), plot = medHivePlot, device='pdf', path = "cole_plots")
 }
+
 
 ```
 
@@ -537,7 +892,7 @@ Figure 12 supplement 1F - distributions of the medians of the raw distances alon
 ```{r}
 medOfDist = filter(synapses, prepost == 1) %>% group_by(bodyid, modality) %>%
             summarize(med = median(distToRoot)) %>%
-            filter(modality %in% c('cv','iv','motor','ms','sleep')) %>%
+            filter(modality %in% c('PFLs', 'DNa03', 'MZ_inter')) %>%
             group_by(bodyid) %>%
             mutate(rankOrder = rank(med)) %>%
             ungroup() %>% 
@@ -545,17 +900,15 @@ medOfDist = filter(synapses, prepost == 1) %>% group_by(bodyid, modality) %>%
               bodyid == nron_info_kept$bodyid[egNum] ~ 1,
               TRUE ~ 0
             )) %>% 
-            mutate(modNum = case_when(
-              modality == 'motor' ~ 1,
-              modality == 'ms' ~ 2,
-              modality == 'iv' ~ 3,
-              modality == 'cv' ~ 4,
-              modality == 'sleep' ~ 5
-            )) 
+           mutate(modNum = case_when(
+              modality == 'PFLs' ~ 1,
+              modality == 'DNa03' ~ 2,
+              modality == 'MZ_inter' ~ 3,
+            ))  
 
   medHivePlot = ggplot(medOfDist) +
-  geom_line(aes(x = factor(modality, levels = c('motor','ms','iv','cv','sleep')), y = med,  group = factor(bodyid), color = factor(eg)), position = position_dodge(0.5), size = 0.5) +
-  geom_point(aes(x = factor(modality, levels = c('motor','ms','iv','cv','sleep')), y = med, fill = modality, group = factor(bodyid)), color = 'black', pch = 21, position = position_dodge(0.5), size = 3, alpha = 0.75) +
+  geom_line(aes(x = factor(modality, levels = c('PFLs', 'DNa03', 'MZ_inter')), y = med,  group = factor(bodyid), color = factor(eg)), position = position_dodge(0.5), size = 0.5) +
+  geom_point(aes(x = factor(modality, levels = c('PFLs', 'DNa03', 'MZ_inter')), y = med, fill = modality, group = factor(bodyid)), color = 'black', pch = 21, position = position_dodge(0.5), size = 3, alpha = 0.75) +
   theme_paper() +
   guides(fill = 'legend') +
   scale_fill_manual(values = modalityCMap) +
@@ -563,7 +916,7 @@ medOfDist = filter(synapses, prepost == 1) %>% group_by(bodyid, modality) %>%
   labs(x = 'modality', y = 'median')
   
 if(savePlot){
-  ggsave(paste('medianDists_hive_jitter_', nronType, '_RD.pdf', sep = ""), plot = medHivePlot, device='pdf', path='plots')
+  ggsave(paste('medianDists_hive_jitter_', nronType, '_RD.pdf', sep = ""), plot = medHivePlot, device='pdf', path='cole_plots')
 }
 
 ```
@@ -582,7 +935,7 @@ medHivePlot = ggplot(filter(medOfEDist_nronType, partnerType %in% motor)) +
   ylim(0.05,0.85)
 
 if(savePlot){
-ggsave(paste('medianDists_hive_jitter_', nronType, '_motorED.pdf', sep = ""), plot = medHivePlot, device='pdf', path = "plots")
+ggsave(paste('medianDists_hive_jitter_', nronType, '_motorED.pdf', sep = ""), plot = medHivePlot, device='pdf', path = "cole_plots")
 }
 
 # Figure 12 supplement 2B
@@ -596,7 +949,7 @@ medHivePlot = ggplot(filter(medOfEDist_nronType, partnerType %in% ms)) +
   ylim(0.05,0.85)
 
 if(savePlot){
-ggsave(paste('medianDists_hive_jitter_', nronType, '_msED.pdf', sep = ""), plot = medHivePlot, device='pdf', path = "plots")
+ggsave(paste('medianDists_hive_jitter_', nronType, '_msED.pdf', sep = ""), plot = medHivePlot, device='pdf', path = "cole_plots")
 }
 
 # Figure 12 supplement 2C
@@ -610,7 +963,7 @@ medHivePlot = ggplot(filter(medOfEDist_nronType, partnerType %in% iv)) +
   ylim(0.05,0.85)
   
 if(savePlot){
-ggsave(paste('medianDists_hive_jitter_', nronType, '_ivED.pdf', sep = ""), plot = medHivePlot, device='pdf', path = "plots")
+ggsave(paste('medianDists_hive_jitter_', nronType, '_ivED.pdf', sep = ""), plot = medHivePlot, device='pdf', path = "cole_plots")
 }
 
 # Figure 12 supplement 2D
@@ -624,7 +977,7 @@ medHivePlot = ggplot(filter(medOfEDist_nronType, partnerType %in% cv)) +
   ylim(0.05,0.85)
 
 if(savePlot){
-ggsave(paste('medianDists_hive_jitter_', nronType, '_cvED.pdf', sep = ""), plot = medHivePlot, device='pdf', path = "plots")
+ggsave(paste('medianDists_hive_jitter_', nronType, '_cvED.pdf', sep = ""), plot = medHivePlot, device='pdf', path = "cole_plots")
 }
 
 # Figure 12 supplement 2E
@@ -638,7 +991,7 @@ medHivePlot = ggplot(filter(medOfEDist_nronType, partnerType %in% sleep)) +
   ylim(0.05,0.85)
 
 if(savePlot){
-ggsave(paste('medianDists_hive_jitter_', nronType, '_sleepED.pdf', sep = ""), plot = medHivePlot, device='pdf', path = "plots")
+ggsave(paste('medianDists_hive_jitter_', nronType, '_sleepED.pdf', sep = ""), plot = medHivePlot, device='pdf', path = "cole_plots")
 }
 
 ```
@@ -650,7 +1003,7 @@ For EPGs, there are 5 orderings in all - First ordering (motor, ms, iv, cv, slee
 Figure 12 supplement 1B (nronType = 'EPG') and supplement 3C (nronType = 'EL') - median rank ordering of modalities
 
 ```{r}
-if(nronType == 'EPG'){
+if(nronType == 'DNa02'){
 currentOrdering = sort(unique(synapses$bodyid), decreasing = T)
 sortingLevel2 = currentOrdering[c(3,9,12,13,29,34,43)]
 sortingLevel3 = currentOrdering[c(8,16,18,28,35)]
@@ -684,7 +1037,7 @@ rankOrderingPlot = ggplot(medOfEDist) +
 }
 
 if(savePlot){
-ggsave(paste('rankOrdering_', nronType, '_ED.pdf', sep = ""), plot = rankOrderingPlot, device='pdf', path = "plots")
+ggsave(paste('rankOrdering_', nronType, '_ED.pdf', sep = ""), plot = rankOrderingPlot, device='pdf', path = "cole_plots")
 }
 ```
 
@@ -777,7 +1130,7 @@ distDistancePlot = ggplot(EdistBetween) +
   scale_x_discrete(labels = c('standard', 'permuted'))
 
 if(savePlot){
-ggsave(paste('distDistance_', nronType, '_ED.pdf', sep = ""), plot = distDistancePlot, device='pdf', path = "plots")
+ggsave(paste('distDistance_', nronType, '_ED.pdf', sep = ""), plot = distDistancePlot, device='pdf', path = "cole_plots")
 }
 ```
 
@@ -891,7 +1244,7 @@ depthVRadDensPlot = ggplot() +
   geom_point(data = rootPtsNewCoord, aes(y = radial, x = depth), color = '#5A5156', alpha = 0.75)
 
 if(savePlot){
-ggsave(paste('depthVsRadial_', nronType, '_ED.pdf', sep = ""), plot = depthVRadDensPlot, device='pdf', path = "plots", scale = 1.5, width = 7, height = 7, units ="cm", dpi = 600, limitsize = TRUE)
+ggsave(paste('depthVsRadial_', nronType, '_ED.pdf', sep = ""), plot = depthVRadDensPlot, device='pdf', path = "cole_plots", scale = 1.5, width = 7, height = 7, units ="cm", dpi = 600, limitsize = TRUE)
 }
 
 ```
@@ -910,7 +1263,7 @@ depthVRadDensPlot = ggplot() +
   geom_point(data = rootPtsNewCoord, aes(y = radial, x = depth), color = '#5A5156', alpha = 0.75)
 
 if (savePlot){
-ggsave(paste('depthVsRadial_', nronType, '_RD.pdf', sep = ""), plot = depthVRadDensPlot, path = "plots", device='pdf', scale = 1.5, width = 7, height = 7, units ="cm", dpi = 600, limitsize = TRUE)
+ggsave(paste('depthVsRadial_', nronType, '_RD.pdf', sep = ""), plot = depthVRadDensPlot, path = "cole_plots", device='pdf', scale = 1.5, width = 7, height = 7, units ="cm", dpi = 600, limitsize = TRUE)
 }
 
 ```
@@ -918,7 +1271,7 @@ ggsave(paste('depthVsRadial_', nronType, '_RD.pdf', sep = ""), plot = depthVRadD
 Figure 12C (right) and Figure 12 supplement 3A (bottom) - synapse densities grouped by modality
 
 ```{r}
-depthVRadMod = ggplot(filter(synapses, prepost == 1, modality %in% c('motor','ms','cv','iv','sleep'))) +
+depthVRadMod = ggplot(filter(synapses, prepost == 1, modality %in% c('pfl3', 'pfl2'))) +
   stat_density_2d(aes(x = depth, y = radial, fill = modality, alpha = stat(nlevel)), bins = 40, contour_var = 'ndensity', geom = 'polygon')+
   geom_path(data=outline, aes(x=c1, y=c2), size = 0.5) +
   scale_fill_manual(values = modalityCMap) +
@@ -926,7 +1279,7 @@ depthVRadMod = ggplot(filter(synapses, prepost == 1, modality %in% c('motor','ms
   coord_fixed(ratio = 1)
 
 if(savePlot){
-ggsave(paste('depthVsRadial_modalities_',nronType,'.pdf', sep = ""), plot = depthVRadMod, device='pdf', path = "plots", scale = 1.5, width = 7, height = 7, units ="cm", dpi = 600, limitsize = TRUE)
+ggsave(paste('depthVsRadial_modalities_',nronType,'.pdf', sep = ""), plot = depthVRadMod, device='pdf', path = "cole_plots", scale = 1.5, width = 7, height = 7, units ="cm", dpi = 600, limitsize = TRUE)
 }
 
 
@@ -943,7 +1296,7 @@ depthVRadMod = ggplot(filter(synapses, prepost == 1, modality %in% c('motor'))) 
   coord_fixed(ratio = 1)
 
 if(savePlot){
-ggsave(paste('depthVsRadial_modalities_',nronType,'_motor.pdf'), plot = depthVRadMod, device='pdf', path = "plots", scale = 1.5, width = 7, height = 7, units ="cm", dpi = 600, limitsize = TRUE)
+ggsave(paste('depthVsRadial_modalities_',nronType,'_motor.pdf'), plot = depthVRadMod, device='pdf', path = "cole_plots", scale = 1.5, width = 7, height = 7, units ="cm", dpi = 600, limitsize = TRUE)
 }
 
 depthVRadMod = ggplot(filter(synapses, prepost == 1, modality %in% c('ms'))) +
@@ -954,7 +1307,7 @@ depthVRadMod = ggplot(filter(synapses, prepost == 1, modality %in% c('ms'))) +
   coord_fixed(ratio = 1)
 
 if(savePlot){
-ggsave(paste('depthVsRadial_modalities',nronType,'_ms.pdf'), plot = depthVRadMod, device='pdf', path = "plots", scale = 1.5, width = 7, height = 7, units ="cm", dpi = 600, limitsize = TRUE)
+ggsave(paste('depthVsRadial_modalities',nronType,'_ms.pdf'), plot = depthVRadMod, device='pdf', path = "cole_plots", scale = 1.5, width = 7, height = 7, units ="cm", dpi = 600, limitsize = TRUE)
 }
 
 depthVRadMod = ggplot(filter(synapses, prepost == 1, modality %in% c('iv'))) +
@@ -965,7 +1318,7 @@ depthVRadMod = ggplot(filter(synapses, prepost == 1, modality %in% c('iv'))) +
   coord_fixed(ratio = 1)
 
 if(savePlot){
-ggsave(paste('depthVsRadial_modalities',nronType,'_iv.pdf'), plot = depthVRadMod, device='pdf', path = "plots", scale = 1.5, width = 7, height = 7, units ="cm", dpi = 600, limitsize = TRUE)
+ggsave(paste('depthVsRadial_modalities',nronType,'_iv.pdf'), plot = depthVRadMod, device='pdf', path = "cole_plots", scale = 1.5, width = 7, height = 7, units ="cm", dpi = 600, limitsize = TRUE)
 }
 
 depthVRadMod = ggplot(filter(synapses, prepost == 1, modality %in% c('cv'))) +
@@ -976,7 +1329,7 @@ depthVRadMod = ggplot(filter(synapses, prepost == 1, modality %in% c('cv'))) +
   coord_fixed(ratio = 1)
 
 if(savePlot){
-ggsave(paste('depthVsRadial_modalities',nronType,'_cv.pdf'), plot = depthVRadMod, device='pdf', path = "plots", scale = 1.5, width = 7, height = 7, units ="cm", dpi = 600, limitsize = TRUE)
+ggsave(paste('depthVsRadial_modalities',nronType,'_cv.pdf'), plot = depthVRadMod, device='pdf', path = "cole_plots", scale = 1.5, width = 7, height = 7, units ="cm", dpi = 600, limitsize = TRUE)
 }
 
 depthVRadMod = ggplot(filter(synapses, prepost == 1, modality %in% c('sleep'))) +
@@ -987,7 +1340,7 @@ depthVRadMod = ggplot(filter(synapses, prepost == 1, modality %in% c('sleep'))) 
   coord_fixed(ratio = 1)
 
 if(savePlot){
-ggsave(paste('depthVsRadial_modalities',nronType,'_sleep.pdf'), plot = depthVRadMod, device='pdf', path = "plots", scale = 1.5, width = 7, height = 7, units ="cm", dpi = 600, limitsize = TRUE)
+ggsave(paste('depthVsRadial_modalities',nronType,'_sleep.pdf'), plot = depthVRadMod, device='pdf', path = "cole_plots", scale = 1.5, width = 7, height = 7, units ="cm", dpi = 600, limitsize = TRUE)
 }
 
 
